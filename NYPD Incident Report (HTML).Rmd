@@ -1,0 +1,146 @@
+---
+title: "NYPD Incident Report (HTML)"
+author: "JJuran"
+date: '2022-10-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**NYPD Incident Report**
+
+For this project, we were tasked with analyzing historical NYPD Incident Data, collected from 2016 through 2021. The raw data, found on the Data.gov website (<https://catalog.data.gov/dataset/strategic-subject-list-historical>), contains 21 fields with 844 observations. The data contained a wide variety of information, from victim information to location data to offender information.
+
+Through this analysis, I began by tackling two questions. First, I explored what the murder breakdown by time and date looked like. I analyzed the distribution of time of day and by month for the murders. Second, I explored how the distribution of crime scattered across New York. I wanted to see if there was a certain location that was more likely to contain a murder.
+
+**Data Exploration and Cleaning:**
+
+To begin, I began by importing the data into R Studio and started to explore the information. I wanted to gain an understanding of what fields contained missing information, what types of data types were in the file, and begin to form a plan of how to transform the raw data into something usable.
+
+```{r cars}
+library(readr)
+NYPD <- read_csv('NYPD_Incident.csv') 
+NYPD2 <- read_csv('NYPD_Incident.csv')
+summary(NYPD)
+```
+
+**Question 1 Analysis: Are there any patterns or insights from looking at the breakdown of murders by time and date?**
+
+From looking at the breakdown of murders by hour of the day, there is a clear pattern that the number of murders slows down around 5am and stays low until about noon. From 1pm to midnight, the overall number of murders gradually increases. From midnight to 5am, the number of murders slowly dwindles, however, still remains higher that the numbers during the mid-morning. This analysis, if anything, confirms a well-known phrase: nothing good happens after midnight!
+
+```{r pressure, echo=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+
+which(is.na(NYPD$INCIDENT_KEY))
+which(is.na(NYPD$OCCUR_DATE))
+which(is.na(NYPD$OCCUR_TIME))
+which(is.na(NYPD$BORO))
+which(is.na(NYPD$LOC_OF_OCCUR_DESC))
+which(is.na(NYPD$PRECINCT))
+which(is.na(NYPD$JURISDICTION_CODE))
+which(is.na(NYPD$LOC_CLASSFCTN_DESC))
+which(is.na(NYPD$LOCATION_DESC)) #yes NA
+which(is.na(NYPD$STATISTICAL_MURDER_FLAG)) #yes NA
+which(is.na(NYPD$PERP_AGE_GROUP)) #yes NA
+which(is.na(NYPD$PERP_SEX)) #yes NA
+which(is.na(NYPD$PERP_RACE)) #yes na
+which(is.na(NYPD$VIC_AGE_GROUP)) #switched out unknown value for overall average
+which(is.na(NYPD$VIC_SEX))
+which(is.na(NYPD$VIC_RACE))
+which(is.na(NYPD$X_COORD_CD))
+which(is.na(NYPD$Y_COORD_CD))
+which(is.na(NYPD$Latitude))
+which(is.na(NYPD$Longitude))
+which(is.na(NYPD$`New Georeferenced Column`))
+
+#Transform Raw Data into workable data set
+NYPD <- NYPD %>%
+  select(-c(BORO, PRECINCT, JURISDICTION_CODE, X_COORD_CD, Y_COORD_CD, Latitude,
+            Longitude, `New Georeferenced Column`)) %>%
+  unite(OCCUR_DATE_TIME, OCCUR_DATE:OCCUR_TIME, sep = ' ', remove = TRUE) %>%
+  mutate(OCCUR_DATE_TIME = mdy_hms(OCCUR_DATE_TIME)) %>%
+  rename(LOCATION_TYPE = LOCATION_DESC,
+         DATE_TIME = OCCUR_DATE_TIME,
+         MURDER = STATISTICAL_MURDER_FLAG)
+summary(NYPD)
+```
+
+Analysis follows:
+
+```{r}
+#Analysis - Question 1 - Compare murders by Hour, Month, and Year
+  #Will Convert Fields to different data types as go through analysis
+NYPD$MURDER <- as.numeric(NYPD$MURDER)
+
+murdersByHour <- NYPD %>%
+  group_by(hour = format(lubridate::floor_date(DATE_TIME, 'hour'), "%H")) %>%
+  summarize(murders = sum(MURDER))
+ggplot(murdersByHour, aes(x = hour, y = murders)) + geom_bar(stat = "identity") +
+  labs(title = "New York 2016 - 2021: Murders by Hour")
+
+murdersByMonth <- NYPD %>%
+  group_by(month = format(lubridate::floor_date(DATE_TIME, 'month'), '%m')) %>%
+  summarize(murders = sum(MURDER))
+ggplot(murdersByMonth, aes(x = month, y = murders), fill = vic_sex) + geom_bar(stat = "identity") +
+  labs(title = "New York 2016 - 2021: Murders by Month")
+
+```
+
+**Question 2: What does the distribution of crime look like?**
+
+By plotting the number of murders against the precinct, we can gain a better understanding of which areas saw the most murders. I overlapped the Boro field over the plot, with color, to better see the breakdown. From this graph, we can see that Brooklyn and the Bronx overwhelmingly had the highest murder counts. Manhattan had two precincts that had higher counts, but the rest were relatively low. Queens and Staten Island had comparably low murder counts.
+
+```{r}
+Incident_data <- NYPD2
+Incident_data <- NYPD2 %>%
+  select(-c("INCIDENT_KEY", "JURISDICTION_CODE",
+            "X_COORD_CD","Y_COORD_CD", 
+            `New Georeferenced Column`))
+
+Incident_data %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE))
+Incident_data$STATISTICAL_MURDER_FLAG <- as.numeric(Incident_data$STATISTICAL_MURDER_FLAG)
+
+Incident_data
+Incident_data_ommitted_na <- na.omit(Incident_data)
+
+graph_incidents <-Incident_data %>% ggplot(aes(PRECINCT, fill = BORO)) + geom_bar() + 
+  theme(legend.position = "bottom", legend.key.size = unit(.20,"cm")) 
+graph_incidents
+
+graph_incidents2 <- Incident_data %>% ggplot(aes(LOC_OF_OCCUR_DESC, fill = BORO)) + geom_bar() +
+  theme(legend.position = "top", legend.key.size = unit(0.30, "cm"))
+graph_incidents2
+
+```
+
+**Model:**
+
+For the model part of the analysis, I decided to run two different ones to enhance the analysis I ran above. First, I created a model that looked at murder and the date/time. I wanted to expand off of the first question I explored. Through running this model, I found that murders could not be predicted off of the date or time independently. The R-Squared value for this model was extremely low, indicating a very poor score.
+
+For the second model, I looked at how well the murders could be predicted by the incident key - basically looking for a pattern in the reports. Again, this model did not perform very well. I believe that if I included more fields, such as Boro, Precinct, and maybe location points, the model could predict the murders better.
+
+```{r}
+#model <- lm(NYPD$MURDER ~ NYPD$DATE_TIME, Data = NYPD)
+#model
+#summary(model)
+
+  #no linear relationship between murder and date/time
+#model2 <- lm(NYPD$MURDER ~ NYPD$INCIDENT_KEY, data = NYPD)
+#model2
+#summary(model2)
+
+```
+
+![](images/Screen%20Shot%202022-10-01%20at%2019.04.08.png)
+
+**Conclusion:**
+
+Through this project I learned more about how to work with data in R Studio and how to use the present information to guide analysis. With all of the work above done, I would like to note a potential source of bias within my work. First off, I focused in on the fields that were completely filled out - with not nulls/missing information. This could limit my view, and thus my analysis, on the murders that occurred. Second, I did not pull in any additional data that could have supplemented my analysis. I was working with a limited perspective on the crimes - there could have been other factors that impacted these patterns, such as weather, gangs, police force distribution, and more.
+
+Thank you for reading through this report. I hope you found it interesting and informational!
